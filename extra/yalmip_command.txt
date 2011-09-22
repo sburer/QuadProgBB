@@ -1,0 +1,2 @@
+x = sdpvar(5,1);
+solvesdp([-1<x<1],x'*magic(5)*x,sdpsettings('solver','quadprogbb','quadprogbb.max_time',1))

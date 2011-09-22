@@ -1,0 +1,4 @@
+07/11/2011
+
+Bug on not being able to get the objective value directly from cplex.solve():
+  * cplex.Solution.objval * is always 'NaN' even when the cplex.Solution.status = 1, meaning that the optimal solution is available.
