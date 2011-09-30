@@ -46,7 +46,7 @@ end
 %% Ensure Matlab uses only one CPU
 %% -------------------------------
 
-maxNumCompThreads(1);
+% maxNumCompThreads(1);
 
 %% ------------------------------
 %% Check inputs for simple errors

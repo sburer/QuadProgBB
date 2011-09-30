@@ -92,7 +92,7 @@ def_max_iter = 10000;  % Default max number of aug Lag iters;
 %% Make sure Matlab is using only one CPU
 %% --------------------------------------
 
-maxNumCompThreads(1);
+% maxNumCompThreads(1);
 
 %% -----------------------------
 %% Set default values for inputs
