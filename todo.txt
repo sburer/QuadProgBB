@@ -2,6 +2,9 @@
 be set from outside, just as you can set max_time. Preferably via a
 struct.
 
+===> Done!
+
+
 2. The code displays a lot of stuff, including garbage (missing ; I
 guess). There should be a possibility to control verbosity, such as 0
 (completely silent), 1 (reasonable display, like the BNB and final info)

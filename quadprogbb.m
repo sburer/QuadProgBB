@@ -1,67 +1,120 @@
-function [fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,max_time,cons)
-%addpath(genpath('cplex122/matlab/'));
+function [fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 
-use_quadprog = 1;
+%% ========================
+%% handle missing arguments
+%% ========================
 
-%% statistics: 
-%% tPre: time spent on preprocessing
-%% tLP:  time spent on calculating bounds in preprocessing
-%% tBB:  time spent on B&B
-%% nodes: total nodes_solved
+%% set default options
+% tol = 1e-8;           if |ub-lb| < tol, we consider lb==ub
+% my_tol  = 1.0e-6;     Fathoming and branching tolerance
+% max_iter = 1000;      Max iters allowed for solving each relaxation
+% use_quadprog = 1;     use quadprog to calculate GUB
+
+defaultopt = struct('max_time',Inf,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1);
+
+if nargin < 2 
+  error('quadprogBB requires at least 2 input arguments.\n');
+  fprintf('Usage: \n');
+  fprintf('[fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)\n');
+end
+
+[n1,n2] = size(H);
+if n1 ~= n2
+  error('H must be a square matrix!');
+end
+
+H = .5*(H + H');
+n = size(f,1);
+
+if n ~= n1
+  error('Dimensions of H and f are not consistent!);
+end
+
+if nargin < 10
+  options = defaultopt;
+else
+  if isstruct(options)
+    if isempty(options.max_time)
+      options.max_time = defaultopt.max_time;
+    end
+    if isempty(options.tol)
+      options.tol = defaultopt.tol;
+    end
+    if isempty(options.fathom_tol)
+      options.fathom_tol = defaultopt.fathom_time;
+    end
+    if isempty(options.max_iter)
+      options.max_iter = defaultopt.max_iter;
+    end
+    if isempty(options.use_quadprog)
+      options.use_quadprog = defaultopt.use_quadprog;
+    end
+  else
+    fprintf('The input argument options is not a struct!\n');
+    fprintf('Overided it with default options\n\n');
+    options = defaultopt;
+  end
+end
+
+if nargin < 9
+  cons = 0;
+end
+
+if nargin < 8
+  UB = ones(n,1);
+end
+
+if nargin < 7
+  LB = zeros(n,1);
+end
+
+if nargin < 6
+  beq = [];
+  if nargin < 5
+    Aeq = [];
+  else
+    if ~isempty(Aeq)
+      error('Dimensions of Aeq and beq are not consistent!');
+    end
+  end
+end
+
+if nargin < 4
+  b = [];
+  if nargin < 3
+    A = [];
+  else
+    if ~isempty(A)
+      error('Dimensions of A and b are not consistent!');
+    end
+  end
+end
+
+% Check inputs for simple errors
+checkinput(H,f,A,b,Aeq,beq,LB,UB);
+
+
+%% ======================================================
+%  Initialize the struct for statistics:
+%
+%  tPre: time spent on preprocessing
+%  tLP:  time spent on calculating bounds in preprocessing
+%  tBB:  time spent on B&B
+%  nodes: total nodes_solved
+%%  ======================================================
 
 stat = struct('tPre',0,'tLP',0,'tBB',0,'nodes',0);
 
 tic;
 
-% warning('Could I be introducing unexpected error with all the transformations? Right now, all B&B calculations are based on transformed problem.');
-% warning('Can complmentarity help strengthen LPs to get dual variable bounds? Dont think so because quadratic terms including dual vars are not present yet.');
-% warning('Final x and fval returned are for transformed problem!');
-% warning('Probably should handle leaf nodes more confidently.');
-
-%% ----------------
-%% Set user options
-%% ----------------
-
-my_tol  = 1.0e-6;     % Fathoming and branching tolerance
-tol = 1e-8;           % if |ub-lb| < tol, we consider lb==ub
-max_iter = 1000;      % Max iters allowed for solving each relaxation
-
-%%-------------------------------------------
-%% Set max_time if user has *not* specified it
-%% -------------------------------------------
-
-if nargin < 9
-    max_time = Inf;
-end
-
-%% -------------------------------------------
-%% Set constant term if user has *not* specified it
-%% -------------------------------------------
-
-if nargin < 10
-    cons = 0;
-end
-
-%% -------------------------------
-%% Ensure Matlab uses only one CPU
-%% -------------------------------
-
-% maxNumCompThreads(1);
-
-%% ------------------------------
-%% Check inputs for simple errors
-%% ------------------------------
-
-checkinput(H,f,A,b,Aeq,beq,LB,UB);
-
-%% ------------------------------
-%% Problem is now turned into standard form
+%% =========================================
+%% Turn problem into standard form
 %%
 %%   min   0.5*x'*H*x + f'*x
 %%   s.t.  A*x = b, x >= 0
 %%         [x*x']_E == 0
 %% Bounds x <= 1 are valid
-%% ------------------------------
+%% =========================================
 
 [H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons);
 
@@ -1273,7 +1326,7 @@ return
 
 function checkinput(H,f,A,b,Aeq,beq,LB,UB)
 
-%% Begin: Basic input checks
+%% Basic input checks
 
 if size(H,1)*size(H,2) == 0 || norm(H,'fro') == 0
     error('H should be nonzero.');
@@ -1287,18 +1340,6 @@ if size(LB,2) > 1 | size(UB,2) > 1
     error('Both LB and UB must be column vectors.')
 end
 
-%% Commented out because we it is not needed anymore
-%   if length(LB)*length(UB) == 0 | sum(isinf([LB;UB])) > 0
-%     error('Both LB and UB must be finite.');
-%   end
-
-%% Commented out for large problems
-%   if 2*size(H,1) + length(b) > 50
-%     error('Problem too big right now.');
-%   end
-
-
-%% End: Basic input checks
 
 return
 
