@@ -1,5 +1,8 @@
 function [fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 
+
+tic;
+
 %% ========================
 %% handle missing arguments
 %% ========================
@@ -9,8 +12,9 @@ function [fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 % my_tol  = 1.0e-6;     Fathoming and branching tolerance
 % max_iter = 1000;      Max iters allowed for solving each relaxation
 % use_quadprog = 1;     use quadprog to calculate GUB
+% verbosity = 1;        control how much infor to display
 
-defaultopt = struct('max_time',Inf,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1);
+defaultopt = struct('max_time',Inf,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1);
 
 if nargin < 2 
   error('quadprogBB requires at least 2 input arguments.\n');
@@ -93,19 +97,35 @@ end
 % Check inputs for simple errors
 checkinput(H,f,A,b,Aeq,beq,LB,UB);
 
-
 %% ======================================================
 %  Initialize the struct for statistics:
 %
-%  tPre: time spent on preprocessing
-%  tLP:  time spent on calculating bounds in preprocessing
-%  tBB:  time spent on B&B
+%  time_pre: time spent on preprocessing
+%  time_LP:  time spent on calculating bounds in preprocessing
+%  time_BB:  time spent on B&B
 %  nodes: total nodes_solved
+%  status: 0) solution found; 1) infeasible; 2) max_time exceeded
 %%  ======================================================
 
-stat = struct('tPre',0,'tLP',0,'tBB',0,'nodes',0);
+stat = struct('time_pre',0,'time_LP',0,'time_BB',0,'nodes',0,'status',[]);
 
-tic;
+
+%% check feasibility 
+
+options = cplexoptimset('Display','off');
+
+[x,fval,exitflag,output] = cplexlp(zeros(n,1),A,b,Aeq,beq,LB,UB,[],options);
+
+if output.cplexstatus > 1
+
+  fprintf('\n\nFail assumption check:\n'
+  fprintf('CPLEX status of solving the feasibility problem: %s', output.cplexstatusstring);
+  x = []; fval = []; time = 0;
+  stat.status = 'infeasible_or_unbounded';
+  return
+
+end
+
 
 %% =========================================
 %% Turn problem into standard form
@@ -118,11 +138,13 @@ tic;
 
 [H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons);
 
-fprintf('\n');
-fprintf('Pre-Processing is complete, time = %d\n\n',toc);
+if options.verbosity > 0
+  fprintf('\n\t Pre-Processing is complete, time = %d\n\n',toc);
+end
 
-stat.tPre = toc;
-stat.tLP = timeLP;
+stat.time_pre = toc;
+stat.time_LP = LP;
+
 
 if sstruct.flag
   fval = sstruct.obj;
@@ -136,6 +158,7 @@ if sstruct.flag
   fprintf('FINAL STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
       0,0,0,0);
   fprintf('FINAL STATUS 4: time = %d\n', time);
+  stat.status = 'optimal_solution';
   return
 end
  
@@ -225,20 +248,25 @@ while length(LBLB) > 0
     %% Print status
     %% ------------
 
-    fprintf('\n');
-    fprintf('STATUS 1: (gUB,gLB,gap) = (%.8e, %.8e, %.3f%%)\n', ...
-        gUB+cons, min(LBLB)+cons, 100*(gUB - min(LBLB))/max([1,abs(gUB+cons)]));
-    fprintf('STATUS 2: (created,solved,pruned,infeas,left) = (%d,%d,%d,%d,%d)\n', ...
-        nodes_created, nodes_solved, nodes_pruned, nodes_infeasible, length(LBLB));
-    fprintf('STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
-        nodes_solved, nodes_solved_fully, nodes_solved_fathomed, nodes_solved_poorly);
-    fprintf('STATUS 4: time = %d\n', toc);
+    if options.verbosity >= 1
+
+      fprintf('\n');
+      fprintf('STATUS 1: (gUB,gLB,gap) = (%.8e, %.8e, %.3f%%)\n', ...
+          gUB+cons, min(LBLB)+cons, 100*(gUB - min(LBLB))/max([1,abs(gUB+cons)]));
+      fprintf('STATUS 2: (created,solved,pruned,infeas,left) = (%d,%d,%d,%d,%d)\n', ...
+          nodes_created, nodes_solved, nodes_pruned, nodes_infeasible, length(LBLB));
+      fprintf('STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
+          nodes_solved, nodes_solved_fully, nodes_solved_fathomed, nodes_solved_poorly);
+      fprintf('STATUS 4: time = %d\n', toc);
+
+    end
 
     %% -------------------------------------
     %% Terminate if too much time has passed
     %% -------------------------------------
 
     if toc > max_time
+      stat.status = 'time_limit_exceeded';
         break;
     end
 
@@ -316,24 +344,22 @@ while length(LBLB) > 0
     %% Solve doubly nonnegative relaxation
     %% -----------------------------------
 
-    fprintf('\n=======================================================================\n');
-    fprintf('------------------ Commencing solution of node %4d -------------------\n', nodes_solved+1);
-
-    Fx
-    Fz
-
-    if isfeasible(local_A,local_b,L,U)
-
-      [newLB,Y,Z,S,SIG,ret] = opt_dnn(H,f,local_A,local_b,B,E,L,U,max_iter,S,SIG,LB_target,LB_beat,max_time-toc,cons);
-
-    else
-
-      ret = 'infeas';
-
+    if options.verbosity > 2
+      fprintf('========================== Commencing solution of node %4d ==========================\n', nodes_solved+1);
+      if options.verbosity > 3
+        Fx, Fz
+      end
     end
 
-    fprintf('\n------------------------------- done! ---------------------------------\n');
-    fprintf('=======================================================================\n\n');
+    if isfeasible(local_A,local_b,L,U)
+      [newLB,Y,Z,S,SIG,ret] = opt_dnn(H,f,local_A,local_b,B,E,L,U,max_iter,S,SIG,LB_target,LB_beat,max_time-toc,cons,options.verbosity);
+    else
+      ret = 'infeas';
+    end
+
+    if options.verbosity > 0
+      fprintf('=====================================================================================\n\n');
+    end
 
     if ~strcmp(ret,'infeas')
 
@@ -584,8 +610,15 @@ fval = gUB+cons;
 x = getsol(xx,sstruct);
 
 time = toc;
-stat.tBB = time - stat.tPre;
+stat.time_BB = time - stat.time_pre;
 stat.nodes = nodes_solved;
+if isempty(stat.status)
+  if nodes_solved_poorly/nodes_solved > .3 
+    stat.status = 'numerical_issues_of_optdnn';
+  else
+    stat.status = 'optimal_solution';
+  end
+end
 
 return
 
@@ -1374,7 +1407,9 @@ function yes_or_no = isfeasible(A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-[x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U);
+options = cplexoptimset('Display','off');
+
+[x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],options);
 
 % solstat
 if output.cplexstatus ~= 1 

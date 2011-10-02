@@ -62,7 +62,7 @@
 %   ret = internal return code
 %
 
-function [LB,Y,Z,S,sig,ret] = opt_dnn(Q,c,A,b,B,E,L,U,max_iter,S,sig,LB_target,LB_beat,max_time,cons)
+function [LB,Y,Z,S,sig,ret] = opt_dnn(Q,c,A,b,B,E,L,U,max_iter,S,sig,LB_target,LB_beat,max_time,cons,verb)
 
 % save mysave
 
@@ -80,7 +80,7 @@ end
 
 num_loop = 1 ; % Default number of block-coordinate descent
                % loops to do per aug Lag iter
-bnd_freq = 25; % Update the lower bound every bnd_freq iters
+bnd_freq = 25; % Uidate the lower bound every bnd_freq iters
 
     norm_tol = 1.0e-15; % Terminate if norm(Y-Z,'fro') < norm_tol
   change_tol = 1.0e-15; % Terminate if avg rel change in bound over 5 
@@ -273,8 +273,19 @@ while iter <= max_iter
 
     %% Print information
 
-    fprintf('   iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
+    if verb == 2
+
+      if mod(iter,bnd_freq*4) == 0  
+        fprintf('   iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
          iter, max(LB,LB_curr)+cons, cputime - start_cputime, norm(Y-Z,'fro')/(0.5*(norm(Y,'fro')+norm(Z,'fro'))), sig);
+      end
+    
+    elseif verb >= 3
+
+         fprintf('   iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
+         iter, max(LB,LB_curr)+cons, cputime - start_cputime, norm(Y-Z,'fro')/(0.5*(norm(Y,'fro')+norm(Z,'fro'))), sig);
+
+    end
 
     %% If LB_curr is better than LB...
 

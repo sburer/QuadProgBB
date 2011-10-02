@@ -2,17 +2,46 @@
 be set from outside, just as you can set max_time. Preferably via a
 struct.
 
-===> Done!
+    Add a struct 'options' to allow user to specify the following parameters:
+    
+      max_time       (inf )
+      max_iter       (1000)
+      tol            (1e-8)
+      fathom_tol     (1e-6)
+      use_quadprog   (1   )
 
-
+    where values in () are default values.
+    
+    Also added handling of missing input argument values.
+   
 2. The code displays a lot of stuff, including garbage (missing ; I
 guess). There should be a possibility to control verbosity, such as 0
 (completely silent), 1 (reasonable display, like the BNB and final info)
 and 2 (everything, like now except the garbage)
 
+
+  what implemented is the following:
+
+  0 - only final statust
+  1 - status after each node
+  2 - display node solve infor, every 100 iterations
+  > 2 - display node solve infor, every 25 iterations, and which node (Fx, Fz) 
+
+  Also suppressed cplexlp output.
+
+
 3. The code should return a numerical status flag (such as 0 means
 solution computed, 1 means it was found infeasible, 2 stopped due to
 max_time or max_iter )
+
+  
+   added a new field value 'status' to the 'stat' struct, which is a string indicating the solution status:
+
+   - optimal_solution
+   - time_limit_exceede
+   - infeasible_or_unbounded
+   - numerical_issues_of_optdnn: if nodes_solved_poorly / nodes_solved > 0.3
+
 
 4. It never hurts to ship binaries.
 
