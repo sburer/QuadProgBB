@@ -13,6 +13,8 @@ struct.
     where values in () are default values.
     
     Also added handling of missing input argument values.
+
+    Change 'quadprog' options to use 'active-set' algorithm, in order to prevent generating warning message; also set the 'Display' option of quadprog to 'off'
    
 2. The code displays a lot of stuff, including garbage (missing ; I
 guess). There should be a possibility to control verbosity, such as 0
@@ -28,6 +30,8 @@ and 2 (everything, like now except the garbage)
   > 2 - display node solve infor, every 25 iterations, and which node (Fx, Fz) 
 
   Also suppressed cplexlp output.
+
+  Changed code to prevent concatinating empty arrays.
 
 
 3. The code should return a numerical status flag (such as 0 means

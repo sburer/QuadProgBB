@@ -202,7 +202,8 @@ SIGSIG = -1; % Signal that we want default sig in aug Lag algorithm
 %% ------------------------------------------------------------------
 
 if use_quadprog
-  [xx,gUB] = quadprog(H,f,[],[],A,b,L_save,U_save);
+  options = optimset('Algorithm','active-set','Display','off');
+  [xx,gUB] = quadprog(H,f,[],[],A,b,L_save,U_save,[],options);
 else
   xx = [];
   gUB = Inf;
@@ -423,7 +424,8 @@ while length(LBLB) > 0
       end
 
       if use_quadprog
-        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0);
+        options = optimset('Algorithm','active-set','Display','off');
+        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,options);
       else
         tmpx = [];
         tmpval = Inf;
@@ -442,7 +444,8 @@ while length(LBLB) > 0
       end
 
       if use_quadprog
-        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0);
+        options = optimset('Algorithm','active-set','Display','off');
+        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,options);
       else
         tmpx = [];
         tmpval = Inf;
@@ -886,10 +889,60 @@ else
   row4 = [];
 end
 %A = [ H*Dx zeros(n,m+lenB) A1'*diag(lambdaUB-lambdaLB) Aeq1'*diag(yUB-yLB) tmp1 tmp2 tmp3;
-A = [ row1 tmp1 tmp2 tmp3;
-      row2 diag(sUB-sLB) zeros(m,nn-n-m);
-      row3 zeros(meq,nn-n);
-      row4 zeros(lenB,m) diag(wUB-wLB) zeros(lenB, nn-n-m-lenB)];
+
+%A = [ row1 tmp1 tmp2 tmp3;
+%      row2 diag(sUB-sLB) zeros(m,nn-n-m);
+%      row3 zeros(meq,nn-n);
+%      row4 zeros(lenB,m) diag(wUB-wLB) zeros(lenB, nn-n-m-lenB)];
+
+%row1 of A
+if ~isempty(tmp1)
+  row1 = [ row1 tmp1 ];
+end
+if ~isempty(tmp2)
+  row1 = [ row1 tmp2 ];
+end
+if ~isempty(tmp3)
+  row1 = [ row1 tmp3 ];
+end
+
+%row2 of A
+if ~isempty(sUB)
+  row2 = [ row2 diag(sUB-sLB) ];
+end
+if m * (nn-n-m) > 0
+  row2 = [ row2 zeros(m,nn-n-m) ];
+end
+
+% row3 of A
+if meq *(nn-n) > 0
+  row3 = [ row3 zeros(meq,nn-n) ];
+end
+
+% row4 of A
+if lenB * m > 0
+  row4 = [ row4 zeros(lenB,m);
+end
+if ~isempty(wUB)
+  row4 = [ row4 diag(wUB - wLB) ];
+end
+if lenB * (nn-n-m-lenB) > 0
+  row4 = [ row4 zeros(lenB, nn-n-m-lenB) ];
+end
+
+A = [];
+if ~isempty(row1)
+  A  = row1;
+end
+if ~isempty(row2)
+  A = [ A; row2 ];
+end
+if ~isempty(row3)
+  A = [ A; row3 ];
+end
+if ~isempty(row4)
+  A = [ A; row4 ];
+end
 
 %% ------------------------------
 %% Shift and scale x affects objs
@@ -1047,11 +1100,79 @@ if ~isempty(Aeq)
   Aeq = [ Aeq zeros(meq,nn-n)];  % (1) 
 end
 
-Aeq = [ Aeq ; 
-        A    zeros(m,.5*n*(n+1)) eye(m) zeros(m,nn-n-m-.5*n*(n+1)) ;              % (2) 
-        H    zeros(n,.5*n*(n+1)+m+lenB) A' Aeq0' tmp1 tmp2 tmp3 ;                 % (3)
-        f'  HH'  zeros(1,m+lenB) b' beq0' zeros(1,lenL+lenB) ones(1,lenB) ;       % (4)
-        tmp4 zeros(lenB,.5*n*(n+1)+m) eye(lenB) zeros(lenB,m+meq+lenL+2*lenB)  ]; % (5)
+%% old ---- might cause empty concatination and warning message 
+% Aeq = [ Aeq ; 
+%        A    zeros(m,.5*n*(n+1)) eye(m) zeros(m,nn-n-m-.5*n*(n+1)) ;              % (2) 
+%        H    zeros(n,.5*n*(n+1)+m+lenB) A' Aeq0' tmp1 tmp2 tmp3 ;                 % (3)
+%        f'  HH'  zeros(1,m+lenB) b' beq0' zeros(1,lenL+lenB) ones(1,lenB) ;       % (4)
+%        tmp4 zeros(lenB,.5*n*(n+1)+m) eye(lenB) zeros(lenB,m+meq+lenL+2*lenB)  ]; % (5)
+
+equ2 = [];
+equ3 = [];
+equ4 = [];
+equ5 = [];
+
+% row2 of new Aeq: [ A   zeros(m,.5*n*(n+1)) eye(m) zeros(m,nn-n-m-.5*n*(n+1)) ]
+if ~isempty(A)
+  equ2 = [ A    zeros(m,.5*n*(n+1)) eye(m) zeros(m,nn-n-m-.5*n*(n+1)) ] ;
+end
+
+% row 3 of new Aeq : [ H    zeros(n,.5*n*(n+1)+m+lenB) A' Aeq0' tmp1 tmp2 tmp3 ]
+equ3 = [H    zeros(n,.5*n*(n+1)+m+lenB) ];
+if ~isempty(A)
+  equ3 = [ equ3  A' ];
+end
+if ~isempty(Aeq0)
+  equ3 = [ equ3 Aeq0' ];
+end
+if ~isempty(tmp1)
+  equ3 = [ equ3 tmp1 ];
+end
+if ~isempty(tmp2)
+  equ3 = [ equ3 tmp2 ];
+end
+if ~isempty(tmp3)
+  equ3 = [ equ3 tmp3 ];
+end
+
+% row 4 of new Aeq: [f'  HH'  zeros(1,m+lenB) b' beq0' zeros(1,lenL+lenB) ones(1,lenB) ]
+equ4 = [ f' HH' ];
+if m + lenB > 0
+  equ4 = [ equ4 zeros(1,m+lenB) ];
+end
+if ~isempty(b)
+  equ4 = [ equ4 b' ];
+end
+if ~isempty(beq0)
+  equ4 = [ equ4 beq0' ];
+end
+if lenL + lenB > 0
+  equ4  = [equ4 zeros(1,lenL + lengB);
+end
+if lenB > 0
+  equ4 = [ equ4 ones(1,lenB) ];
+end
+
+% row 5 of new Aeq: [ tmp4 zeros(lenB,.5*n*(n+1)+m) eye(lenB) zeros(lenB,m+meq+lenL+2*lenB) ]
+if ~isempty(tmp4)
+  equ5 = tmp4;
+end
+if lenB > 0
+  equ5 = [ equ5 zeros(lenB,.5*n*(n+1)+m) eye(lenB) zeros(lenB,m+meq+lenL+2*lenB) ];
+end
+
+if ~isempty(equ2)
+  Aeq = [ Aeq; equ2 ];
+end
+if ~isempty(equ3)
+  Aeq = [ Aeq; equ3 ];
+end
+if ~isempty(equ4)
+  Aeq = [ Aeq; equ4 ];
+end
+if ~isempty(equ5)
+  Aeq = [ Aeq; equ5];
+end
 
 
 beq = [beq; b; -f; 0; ones(lenB,1)];
@@ -1388,7 +1509,8 @@ function x = project(x0,A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U);
+options = optimset('Display','off');
+x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],options);
 
 % solstat
 % details
