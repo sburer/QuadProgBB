@@ -276,13 +276,13 @@ while iter <= max_iter
     if verb == 2
 
       if mod(iter,bnd_freq*4) == 0  
-        fprintf('   iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
+        fprintf('iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
          iter, max(LB,LB_curr)+cons, cputime - start_cputime, norm(Y-Z,'fro')/(0.5*(norm(Y,'fro')+norm(Z,'fro'))), sig);
       end
     
     elseif verb >= 3
 
-         fprintf('   iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
+         fprintf('iter = %4d   LB = %.8e   time = %4.2f   norm = %.1e   sig = %.1e\n', ...
          iter, max(LB,LB_curr)+cons, cputime - start_cputime, norm(Y-Z,'fro')/(0.5*(norm(Y,'fro')+norm(Z,'fro'))), sig);
 
     end

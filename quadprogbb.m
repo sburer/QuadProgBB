@@ -7,7 +7,7 @@ tic;
 %% handle missing arguments
 %% ========================
 
-%% set default options
+% set default options
 % tol = 1e-8;           if |ub-lb| < tol, we consider lb==ub
 % my_tol  = 1.0e-6;     Fathoming and branching tolerance
 % max_iter = 1000;      Max iters allowed for solving each relaxation
@@ -31,27 +31,30 @@ H = .5*(H + H');
 n = size(f,1);
 
 if n ~= n1
-  error('Dimensions of H and f are not consistent!);
+  error('Dimensions of H and f are not consistent!');
 end
 
 if nargin < 10
   options = defaultopt;
 else
   if isstruct(options)
-    if isempty(options.max_time)
+    if ~isfield(options,'max_time')
       options.max_time = defaultopt.max_time;
     end
-    if isempty(options.tol)
+    if ~isfield(options,'tol')
       options.tol = defaultopt.tol;
     end
-    if isempty(options.fathom_tol)
-      options.fathom_tol = defaultopt.fathom_time;
+    if ~isfield(options,'fathom_tol')
+      options.fathom_tol = defaultopt.fathom_tol;
     end
-    if isempty(options.max_iter)
+    if ~isfield(options,'max_iter')
       options.max_iter = defaultopt.max_iter;
     end
-    if isempty(options.use_quadprog)
+    if ~isfield(options,'use_quadprog')
       options.use_quadprog = defaultopt.use_quadprog;
+    end
+    if ~isfield(options,'verbosity')
+      options.verbosity = 1;
     end
   else
     fprintf('The input argument options is not a struct!\n');
@@ -59,6 +62,7 @@ else
     options = defaultopt;
   end
 end
+
 
 if nargin < 9
   cons = 0;
@@ -112,20 +116,22 @@ stat = struct('time_pre',0,'time_LP',0,'time_BB',0,'nodes',0,'status',[]);
 
 %% check feasibility 
 
-options = cplexoptimset('Display','off');
+if (~isempty(A)) || (~isempty(Aeq))
+  
+  cplexopts = cplexoptimset('Display','off');
+  [x,fval,exitflag,output] = cplexlp(zeros(n,1),A,b,Aeq,beq,LB,UB,[],cplexopts);
+  
+  if output.cplexstatus > 1
 
-[x,fval,exitflag,output] = cplexlp(zeros(n,1),A,b,Aeq,beq,LB,UB,[],options);
+    fprintf('\n\nFail assumption check:\n');
+    fprintf('CPLEX status of solving the feasibility problem: %s', output.cplexstatusstring);
+    x = []; fval = []; time = 0;
+    stat.status = 'infeasible_or_unbounded';
+    return
 
-if output.cplexstatus > 1
-
-  fprintf('\n\nFail assumption check:\n'
-  fprintf('CPLEX status of solving the feasibility problem: %s', output.cplexstatusstring);
-  x = []; fval = []; time = 0;
-  stat.status = 'infeasible_or_unbounded';
-  return
+  end
 
 end
-
 
 %% =========================================
 %% Turn problem into standard form
@@ -136,14 +142,15 @@ end
 %% Bounds x <= 1 are valid
 %% =========================================
 
-[H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons);
+[H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons,options.tol);
 
-if options.verbosity > 0
-  fprintf('\n\t Pre-Processing is complete, time = %d\n\n',toc);
+
+if options.verbosity > 1
+  fprintf('\n****  Pre-Processing is complete, time = %.2f  ****\n',toc);
 end
 
 stat.time_pre = toc;
-stat.time_LP = LP;
+stat.time_LP = timeLP;
 
 
 if sstruct.flag
@@ -152,6 +159,7 @@ if sstruct.flag
   time = toc;
   nodes_solved = 0;
   fprintf('\n');
+  fprintf('=========================== Node 0 ============================\n\n');
   fprintf('FINAL STATUS 1: optimal value = %.8e\n', fval);
   fprintf('FINAL STATUS 2: (created,solved,pruned,infeas,left) = (%d,%d,%d,%d,%d)\n', ...
       0,0,0,0,0);
@@ -171,8 +179,8 @@ n = sstruct.n;
 
 m0 = length(cmp1);
 
-Fx = find(abs(L(cmp1)-U(cmp1))<tol & abs(L(cmp1)-0)<tol);
-Fz = find(abs(L(cmp2)-U(cmp2))<tol & abs(L(cmp2)-0)<tol);
+Fx = find(abs(L(cmp1)-U(cmp1))<options.tol & abs(L(cmp1)-0)<options.tol);
+Fz = find(abs(L(cmp2)-U(cmp2))<options.tol & abs(L(cmp2)-0)<options.tol);
 
 %% Setup constants for passage into opt_dnn subroutine
 
@@ -201,9 +209,9 @@ SIGSIG = -1; % Signal that we want default sig in aug Lag algorithm
 %% Calculate first global upper bound and associated fathoming target
 %% ------------------------------------------------------------------
 
-if use_quadprog
-  options = optimset('Algorithm','active-set','Display','off');
-  [xx,gUB] = quadprog(H,f,[],[],A,b,L_save,U_save,[],options);
+if options.use_quadprog
+  quadopts = optimset('LargeScale','off','Display','off');
+  [xx,gUB] = quadprog(H,f,[],[],A,b,L_save,U_save,[],quadopts);
 else
   xx = [];
   gUB = Inf;
@@ -212,7 +220,7 @@ end
 if gUB == Inf
   LB_target = Inf;
 else
-  LB_target = gUB - my_tol*max(1,abs(gUB));
+  LB_target = gUB - options.fathom_tol*max(1,abs(gUB));
 end
 LB_beat = -Inf;
 
@@ -242,6 +250,11 @@ Fz0 = Fz;
 t0 = m+lenL;
 t1 = m+lenL+lenB;
 
+k = 0;
+
+if options.verbosity >=1
+  fprintf('\n=============================== Initial Status =================================\n');
+end
 
 while length(LBLB) > 0
 
@@ -260,13 +273,14 @@ while length(LBLB) > 0
           nodes_solved, nodes_solved_fully, nodes_solved_fathomed, nodes_solved_poorly);
       fprintf('STATUS 4: time = %d\n', toc);
 
+      fprintf('\n\n==================================== Node %d =====================================\n',nodes_solved+1);
     end
 
     %% -------------------------------------
     %% Terminate if too much time has passed
     %% -------------------------------------
 
-    if toc > max_time
+    if toc > options.max_time
       stat.status = 'time_limit_exceeded';
         break;
     end
@@ -331,7 +345,7 @@ while length(LBLB) > 0
     if LB == -Inf
       LB_beat = -Inf;
     else
-      LB_beat = LB - my_tol*max(1,abs(LB));
+      LB_beat = LB - options.fathom_tol*max(1,abs(LB));
     end
 
     %% Sam: Need to use U-L to find fixed variables. Add same
@@ -345,21 +359,14 @@ while length(LBLB) > 0
     %% Solve doubly nonnegative relaxation
     %% -----------------------------------
 
-    if options.verbosity > 2
-      fprintf('========================== Commencing solution of node %4d ==========================\n', nodes_solved+1);
-      if options.verbosity > 3
-        Fx, Fz
-      end
-    end
+%    if options.verbosity > 2 
+%      Fx, Fz
+%    end
 
     if isfeasible(local_A,local_b,L,U)
-      [newLB,Y,Z,S,SIG,ret] = opt_dnn(H,f,local_A,local_b,B,E,L,U,max_iter,S,SIG,LB_target,LB_beat,max_time-toc,cons,options.verbosity);
+      [newLB,Y,Z,S,SIG,ret] = opt_dnn(H,f,local_A,local_b,B,E,L,U,options.max_iter,S,SIG,LB_target,LB_beat,options.max_time-toc,cons,options.verbosity);
     else
       ret = 'infeas';
-    end
-
-    if options.verbosity > 0
-      fprintf('=====================================================================================\n\n');
     end
 
     if ~strcmp(ret,'infeas')
@@ -423,9 +430,9 @@ while length(LBLB) > 0
         xx = x0;
       end
 
-      if use_quadprog
-        options = optimset('Algorithm','active-set','Display','off');
-        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,options);
+      if options.use_quadprog
+        quadopts = optimset('LargeScale','off','Display','off');
+        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,quadopts);
       else
         tmpx = [];
         tmpval = Inf;
@@ -443,9 +450,9 @@ while length(LBLB) > 0
         xx = x0;
       end
 
-      if use_quadprog
-        options = optimset('Algorithm','active-set','Display','off');
-        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,options);
+      if options.use_quadprog
+        quadopts = optimset('LargeScale','off','Display','off');
+        [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,quadopts);
       else
         tmpx = [];
         tmpval = Inf;
@@ -460,7 +467,7 @@ while length(LBLB) > 0
       if gUB == Inf
         LB_target = Inf;
       else
-        LB_target = gUB - my_tol*max(1,abs(gUB));
+        LB_target = gUB - options.fathom_tol*max(1,abs(gUB));
       end
 
       %% ----------------------
@@ -501,7 +508,7 @@ while length(LBLB) > 0
           %% part of a feasible x0 via CPLEX (see above). In CPLEX we
           %% trust!
           %%
-           if LB < LB_target & vio > my_tol
+           if LB < LB_target & vio > options.fathom_tol
 
               if index <= t0
                 Fxa = union(Fx,index);
@@ -597,7 +604,6 @@ end
 %% -----------------
 
 fprintf('\n');
-fprintf('FINAL STATUS 1: optimal value = %.8e\n', gUB+cons);
 fprintf('FINAL STATUS 2: (created,solved,pruned,infeas,left) = (%d,%d,%d,%d,%d)\n', ...
     nodes_created, nodes_solved, nodes_pruned, nodes_infeasible, length(LBLB));
 fprintf('FINAL STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
@@ -679,12 +685,11 @@ return
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-function [H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons)
+function [H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons,tol)
 
 % If abs(difference of two values) < tol, the two values are considered
 % to be equal
 
-tol = 1e-8;
 E = [];
 sstruct = struct('flag',0,'obj',-inf,'fx1',[],'fxval1',[],'ub2',[],'idxU2',[],...
                 'lb3',[],'idxL3',[],'ub4',[],'idxU4',[],'idxU5',[],'ub5',[],...
@@ -921,7 +926,7 @@ end
 
 % row4 of A
 if lenB * m > 0
-  row4 = [ row4 zeros(lenB,m);
+  row4 = [ row4 zeros(lenB,m)] ;
 end
 if ~isempty(wUB)
   row4 = [ row4 diag(wUB - wLB) ];
@@ -1147,7 +1152,7 @@ if ~isempty(beq0)
   equ4 = [ equ4 beq0' ];
 end
 if lenL + lenB > 0
-  equ4  = [equ4 zeros(1,lenL + lengB);
+  equ4  = [equ4 zeros(1,lenL + lenB) ];
 end
 if lenB > 0
   equ4 = [ equ4 ones(1,lenB) ];
@@ -1161,6 +1166,10 @@ if lenB > 0
   equ5 = [ equ5 zeros(lenB,.5*n*(n+1)+m) eye(lenB) zeros(lenB,m+meq+lenL+2*lenB) ];
 end
 
+if isempty(Aeq)
+  tmpp = [ size(equ2,2) size(equ3,2) size(equ4,2) size(equ5,2) ];
+  Aeq = zeros(0,max(tmpp));
+end
 if ~isempty(equ2)
   Aeq = [ Aeq; equ2 ];
 end
@@ -1509,8 +1518,8 @@ function x = project(x0,A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-options = optimset('Display','off');
-x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],options);
+quadopts = optimset('LargeScale','off','Display','off');
+x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],quadopts);
 
 % solstat
 % details
@@ -1529,9 +1538,13 @@ function yes_or_no = isfeasible(A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-options = cplexoptimset('Display','off');
+cplexopts = cplexoptimset('Display','off');
 
-[x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],options);
+%cplexopts = cplexoptimset('cplex');
+%cplexopts.cplex.Param.lpmethod.Cur = 1;
+%cplexopts.Display = 'off';
+
+[x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],cplexopts);
 
 % solstat
 if output.cplexstatus ~= 1 
@@ -1636,6 +1649,10 @@ cplex.Model.A     = AA;
 cplex.Model.lhs   = lhs;
 cplex.Model.rhs   = bb;
 
+% use primal dual method
+cplex.Param.lpmethod.Cur = 2;
+
+
 % solve first lower bound
 if strcmp(flag,'l')|strcmp(flag,'b')
   cplex.Model.sense = 'minimize';
@@ -1652,6 +1669,7 @@ end
 if strcmp(flag,'u')|strcmp(flag,'b')
   cplex.Model.sense = 'maximize';
   cplex.solve();
+  
   if  cplex.Solution.status ~= 1
      fprintf('1st LP upper bound cannot be obtained: either unbounded or infeasible!');
      error('CPLEX solution status = %d',cplex.Solution.status);
@@ -1684,14 +1702,11 @@ if strcmp(flag,'u')|strcmp(flag,'b')
   index_U(idx_U) = 0;
 end
 
-
 colstat = cplex.Solution.basis.colstat;
 rowstat = cplex.Solution.basis.rowstat;
 
-% use primal simplex method
-
+% use primal dual method
 cplex.Param.lpmethod.Cur = 1;
-
 
 % solve upper bounds
 
@@ -1705,7 +1720,6 @@ if strcmp(flag,'b')|strcmp(flag,'u')
       cplex.Start.basis.colstat = colstat;
       cplex.Start.basis.rowstat = rowstat;
       cplex.solve();
-
       if cplex.Solution.status ~=  1
         fprintf('%d-th LP upper bound cannot be obtained: either unbounded or infeasible',i);
         error('CPLEX solution status = %d',cplex.Solution.status);
