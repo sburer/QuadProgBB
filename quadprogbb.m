@@ -1,4 +1,69 @@
-function [fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
+function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
+%% [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
+% QUADPROGBB globally solves nonconvex quadratic programming problem
+%
+%    min      1/2*x'*H*x + f'*x + cons
+%    s.t.       A * x <= b
+%             Aeq * x == beq
+%             LB <= x <= UB
+%
+% Syntax:
+% x = quadprogbb(H,f)
+% x = quadprogbb(H,f,A,b)
+% x = quadprogbb(H,f,A,b,Aeq,beq)
+% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB)
+% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons)
+% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
+% [x,fval] = quadprogbb(H,f,...)
+% [x,fval,time] = quadprogbb(H,f,...)
+% [x,fval,time,stat] = quadprogbb(H,f,...)
+%
+% Input arguments:
+% * H,f,A,b,Aeq,beq,LB,UB: similar to the corresponding input arguments
+%   of MATLAB's 'quadprog' function; also see the QP formulation above
+% * cons: a constant in the objective
+% * options: a structure array with the following fields, with default 
+%   fields in Parentheses:
+%   1)max_time (86400): the maximum amount of time the branch-and-bound
+%     algorithm is allowed to run, in seconds
+%   2)max_iter (1000): the maximum number of iterations for the algorithm 
+%     that solves the SDP relaxation
+%   3)fathom_tol (1e-6): a node witha lower bound vlb is fathomed if 
+%    (GUB - vlb)/max(GUB,1) < fathom_tol
+%   4)use_quadprog (1): method used to obtain GUB. If use_quadprog is 1,
+%     MATLAB's quadprog is used to obtain GUB; otherwise, a feasible
+%     solution extracted from the SDP relaxation is used to calculate GUB
+%   5)verbosity (1): has the following different display levels
+%       0 : only display the final results
+%       1 : display status for each node 
+%       2 : display progress of solving each node, every 100 iterations
+%       >2 : display progress of solving each node, every 25 iterations
+%   6)tol (1e-8): numeric tolerance. When |LB(i) - UB(i)| < tol, we treat
+%     LB(i) as equal to UB(i), that is, x(i) is fixed.
+%
+% Output arguments:
+% * x,fval: the solution and objective value of the QP; check stat.status for
+%   the status of the solution, i.e., whether it is optimal
+% * time: time used by the branch-and-bound algorithm, in seconds
+% * stat: a struct with more statistics of the algorithm:
+%   1)time_pre: time spent on preprocessing
+%   2)time_LP:  time spent on calculating bounds in preprocessing
+%   3)time_BB:  time spent on branch-and-bound
+%   4)nodes: total number of nodes solved
+%   5)status: final status of the solution
+%     'optimal_solution': optimal solution found
+%     'time_limit_exceeded' : time limit specified by options.max_time is excedeeded
+%     'infeasible_or_unbounded' : the problem is infeasible or unbounded
+%     'numerical_issues_of_optdnn': if a large pencentage (>30%) of the nodes encountered
+%     numerical issues, then this status is returned
+%
+% References:
+%  * Samuel Burer. "Optimizing a polyhedral-semidefinite relaxation of completely positive 
+%  programs." Mathematical Programming Computation, 2(1):1-19, 2010.
+%
+%  * Jieqiu Chen, Samuel Burer. "Globally solving nonconvex quadratic programming problems 
+%  via completely positive programming." Preprint ANL/MCS-P1837-0211.
+% 
 
 
 tic;
@@ -8,18 +73,18 @@ tic;
 %% ========================
 
 % set default options
-% tol = 1e-8;           if |ub-lb| < tol, we consider lb==ub
-% my_tol  = 1.0e-6;     Fathoming and branching tolerance
-% max_iter = 1000;      Max iters allowed for solving each relaxation
-% use_quadprog = 1;     use quadprog to calculate GUB
-% verbosity = 1;        control how much infor to display
 
-defaultopt = struct('max_time',Inf,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1);
+defaultopt = struct('max_time',86400,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1);
 
 if nargin < 2 
-  error('quadprogBB requires at least 2 input arguments.\n');
   fprintf('Usage: \n');
-  fprintf('[fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)\n');
+  fprintf('[fval,x,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB)\n');
+  if nargin > 0
+     error('quadprogBB requires at least 2 input arguments.');
+  end
+   x = []; fval = []; time = 0;
+   stat.status = []; 
+  return
 end
 
 [n1,n2] = size(H);
@@ -66,6 +131,10 @@ end
 
 if nargin < 9
   cons = 0;
+else
+  if isempty(cons)
+    cons = 0;
+  end
 end
 
 if nargin < 8
@@ -123,7 +192,7 @@ if (~isempty(A)) || (~isempty(Aeq))
   
   if output.cplexstatus > 1
 
-    fprintf('\n\nFail assumption check:\n');
+    fprintf('\n\nFail assumption check:\n\n');
     fprintf('CPLEX status of solving the feasibility problem: %s', output.cplexstatusstring);
     x = []; fval = []; time = 0;
     stat.status = 'infeasible_or_unbounded';
@@ -282,7 +351,7 @@ while length(LBLB) > 0
 
     if toc > options.max_time
       stat.status = 'time_limit_exceeded';
-        break;
+      break;
     end
 
     %% -----------------------------------------------
@@ -604,6 +673,7 @@ end
 %% -----------------
 
 fprintf('\n');
+fprintf('FINAL STATUS 1: optimal value = %.8e\n', gUB+cons);
 fprintf('FINAL STATUS 2: (created,solved,pruned,infeas,left) = (%d,%d,%d,%d,%d)\n', ...
     nodes_created, nodes_solved, nodes_pruned, nodes_infeasible, length(LBLB));
 fprintf('FINAL STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
@@ -617,8 +687,8 @@ fval = gUB+cons;
 %% ---------------------------------------------
 
 x = getsol(xx,sstruct);
-
 time = toc;
+
 stat.time_BB = time - stat.time_pre;
 stat.nodes = nodes_solved;
 if isempty(stat.status)
@@ -742,7 +812,7 @@ if tmp_m1 < min(tmp_m,tmp_n)
   beq = beq(rowidx);
 end
 
-[H,f,A,b,Aeq,beq,LB,UB,cons,sstruct,tlp] = refm1(H,f,A,b,Aeq,beq,LB,UB,cons,sstruct);
+[H,f,A,b,Aeq,beq,LB,UB,cons,sstruct,tlp] = refm(H,f,A,b,Aeq,beq,LB,UB,cons,sstruct);
 
 timeLP = timeLP + tlp;
 %% ----------------------------------------------
@@ -1312,7 +1382,7 @@ return
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-function [H,f,A,b,Aeq,beq,LB,UB,cons,sstruct,timeLP] = refm1(H,f,A,b,Aeq,beq,LB,UB,cons,sstruct)
+function [H,f,A,b,Aeq,beq,LB,UB,cons,sstruct,timeLP] = refm(H,f,A,b,Aeq,beq,LB,UB,cons,sstruct)
 %% REF1 perform the first reformulation in appendix of the paper
 m = size(A,1);
 n = size(H,1);
@@ -1658,7 +1728,7 @@ if strcmp(flag,'l')|strcmp(flag,'b')
   cplex.Model.sense = 'minimize';
   cplex.solve();
   if  cplex.Solution.status ~= 1
-    fprintf('1st LP lower bound cannot be obtained: either unbounded or infeasible!');
+    fprintf('1st LP lower bound cannot be obtained: either unbounded or infeasible!\n\n');
     error('CPLEX solution status = %d',cplex.Solution.status);
   end
   xx1 = cplex.Solution.x;
@@ -1671,7 +1741,7 @@ if strcmp(flag,'u')|strcmp(flag,'b')
   cplex.solve();
   
   if  cplex.Solution.status ~= 1
-     fprintf('1st LP upper bound cannot be obtained: either unbounded or infeasible!');
+     fprintf('1st LP upper bound cannot be obtained: either unbounded or infeasible!\n\n');
      error('CPLEX solution status = %d',cplex.Solution.status);
   end
   xx2 = cplex.Solution.x;
@@ -1721,7 +1791,7 @@ if strcmp(flag,'b')|strcmp(flag,'u')
       cplex.Start.basis.rowstat = rowstat;
       cplex.solve();
       if cplex.Solution.status ~=  1
-        fprintf('%d-th LP upper bound cannot be obtained: either unbounded or infeasible',i);
+        fprintf('%d-th LP upper bound cannot be obtained: either unbounded or infeasible!\n\n',i);
         error('CPLEX solution status = %d',cplex.Solution.status);
       end
       xUB(i)= ff'*cplex.Solution.x;
@@ -1748,7 +1818,7 @@ if strcmp(flag,'b')|strcmp(flag,'l')
       cplex.solve();
 
       if cplex.Solution.status ~=  1
-        fprintf('%d-th LP lower bound cannot be obtained: either unbounded or infeasible',i);
+        fprintf('%d-th LP lower bound cannot be obtained: either unbounded or infeasible!\n\n',i);
         error('CPLEX solution status = %d',cplex.Solution.status);
       end
       xLB(i)= ff'*cplex.Solution.x;

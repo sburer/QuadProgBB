@@ -4,7 +4,7 @@ struct.
 
     - Add a struct 'options' to allow user to specify the following parameters:
     
-      max_time       (inf )
+      max_time       (86400)
       max_iter       (1000)
       tol            (1e-8)
       fathom_tol     (1e-6)
@@ -26,13 +26,15 @@ and 2 (everything, like now except the garbage)
   0 : only final statust
   1 : status after each node
   2 : display node solve infor, every 100 iterations
-  > 2 : display node solve infor, every 25 iterations, and which node (Fx, Fz) 
+  > 2 : display node solve infor, every 25 iterations
 
   - Also suppressed cplexlp output.
 
   - Changed code to prevent concatinating empty arrays.
 
-  - Change 'quadprog' options to use 'active-set' algorithm, in order to prevent generating warning message; also set the 'Display' option of quadprog to 'off'
+  - Change 'quadprog' options as follows in order to prevent generating warning message
+  
+  quadopts = optimset('LargeScale','off','Display','off');
 
 3. The code should return a numerical status flag (such as 0 means
 solution computed, 1 means it was found infeasible, 2 stopped due to
