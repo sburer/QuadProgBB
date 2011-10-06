@@ -1,5 +1,5 @@
 %
-% [LB,Y,Z,S,sig,ret] = opt_dnn(Q,c,A,b,B,E,L,U,max_iter,S,sig,LB_target,LB_beat,max_time,cons)
+% [LB,Y,Z,S,sig,ret] = opt_dnn(Q,c,A,b,B,E,L,U,max_iter,S,sig,LB_target,LB_beat,max_time,cons,verb)
 %
 % ------------------------- ! IMPORTANT NOTES ! ------------------------
 %
@@ -52,6 +52,8 @@
 %   branch-and-bound
 % 
 %   max_time = time limit (in seconds)
+%
+%   verb = controls verbosity
 %
 % The ouputs are:
 %
@@ -116,7 +118,9 @@ if length(c) == 0
 end
 
 if length(A) == 0 | length(b) == 0
-  warning('At least one of A or b is empty. Assuming both empty.');
+  if verb > 2
+    warning('At least one of A or b is empty. Assuming both empty.');
+  end
   A = zeros(1,n);
   b = 0;
 end
@@ -254,7 +258,9 @@ while iter <= max_iter
 
       if ratio <= 0 | sig * ratio <= sig_orig/100
         numwarns = numwarns+1;
-        warning('Got possible sig <= 0 or sig <= sig_orig/100. Backtracking to fix.');
+        if verb > 2
+          warning('Got possible sig <= 0 or sig <= sig_orig/100. Backtracking to fix.');
+        end
         S = S_save;
         num_loop = num_loop+1;
         bnd_freq = max(1,ceil(bnd_freq/2));

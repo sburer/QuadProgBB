@@ -42,8 +42,8 @@ function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 %     LB(i) as equal to UB(i), that is, x(i) is fixed.
 %
 % Output arguments:
-% * x,fval: the solution and objective value of the QP; check stat.status for
-%   the status of the solution, i.e., whether it is optimal
+% * x,fval: the solution and objective value of the QP; check stat.status
+%   for the status of the solution, i.e., whether it is optimal
 % * time: time used by the branch-and-bound algorithm, in seconds
 % * stat: a struct with more statistics of the algorithm:
 %   1)time_pre: time spent on preprocessing
@@ -52,10 +52,13 @@ function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 %   4)nodes: total number of nodes solved
 %   5)status: final status of the solution
 %     'optimal_solution': optimal solution found
-%     'time_limit_exceeded' : time limit specified by options.max_time is excedeeded
+%     'time_limit_exceeded' : time limit specified by options.max_time is 
+%     excedeeded
 %     'infeasible_or_unbounded' : the problem is infeasible or unbounded
-%     'numerical_issues_of_optdnn': if a large pencentage (>30%) of the nodes encountered
-%     numerical issues, then this status is returned
+%     'numerical_issues_of_optdnn': if a large pencentage (>30%) of the 
+%     nodes encountered numerical issues, then this status is returned
+% 
+% Third party software: CPLEX, used as LP solvers
 %
 % References:
 %  * Samuel Burer. "Optimizing a polyhedral-semidefinite relaxation of completely positive 
@@ -1609,10 +1612,6 @@ function yes_or_no = isfeasible(A,b,L,U)
 %                           [], []);
 
 cplexopts = cplexoptimset('Display','off');
-
-%cplexopts = cplexoptimset('cplex');
-%cplexopts.cplex.Param.lpmethod.Cur = 1;
-%cplexopts.Display = 'off';
 
 [x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],cplexopts);
 
