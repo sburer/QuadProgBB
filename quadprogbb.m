@@ -65,9 +65,12 @@ function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
 %  programs." Mathematical Programming Computation, 2(1):1-19, 2010.
 %
 %  * Jieqiu Chen, Samuel Burer. "Globally solving nonconvex quadratic programming problems 
-%  via completely positive programming." Preprint ANL/MCS-P1837-0211.
+%  via completely positive programming." Mathematical Programming Computation, DOI: 10.1007/s12532-011-0033-9.
 % 
 
+%% enforce matlab to use only 1 processor
+
+maxNumCompThreads(1);
 
 tic;
 
@@ -215,7 +218,6 @@ end
 %% =========================================
 
 [H,f,A,b,E,cons,L,U,sstruct,timeLP] = standardform(H,f,A,b,Aeq,beq,LB,UB,cons,options.tol);
-
 
 if options.verbosity > 1
   fprintf('\n****  Pre-Processing is complete, time = %.2f  ****\n',toc);
