@@ -1,76 +1,110 @@
-function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
-%% [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
-% QUADPROGBB globally solves nonconvex quadratic programming problem
+function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,options)
+%% [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,options)
 %
-%    min      1/2*x'*H*x + f'*x + cons
+% QUADPROGBB globally solves the following nonconvex quadratic
+% programming problem:
+%
+%    min      1/2*x'*H*x + f'*x
 %    s.t.       A * x <= b
 %             Aeq * x == beq
 %             LB <= x <= UB
 %
+% --------------------------------------------------------------
+% --> This code requires the Matlab interface to CPLEX 12.2! <--
+% --------------------------------------------------------------
+%
 % Syntax:
-% x = quadprogbb(H,f)
-% x = quadprogbb(H,f,A,b)
-% x = quadprogbb(H,f,A,b,Aeq,beq)
-% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB)
-% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons)
-% x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,cons,options)
-% [x,fval] = quadprogbb(H,f,...)
-% [x,fval,time] = quadprogbb(H,f,...)
-% [x,fval,time,stat] = quadprogbb(H,f,...)
+%
+%   x = quadprogbb(H,f)
+%   x = quadprogbb(H,f,A,b)
+%   x = quadprogbb(H,f,A,b,Aeq,beq)
+%   x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB)
+%   x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB)
+%   x = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,options)
+%   [x,fval] = quadprogbb(H,f,...)
+%   [x,fval,time] = quadprogbb(H,f,...)
+%   [x,fval,time,stat] = quadprogbb(H,f,...)
 %
 % Input arguments:
-% * H,f,A,b,Aeq,beq,LB,UB: similar to the corresponding input arguments
-%   of MATLAB's 'quadprog' function; also see the QP formulation above
-% * cons: a constant in the objective
-% * options: a structure array with the following fields, with default 
-%   fields in Parentheses:
-%   1)max_time (86400): the maximum amount of time the branch-and-bound
-%     algorithm is allowed to run, in seconds
-%   2)max_iter (1000): the maximum number of iterations for the algorithm 
-%     that solves the SDP relaxation
-%   3)fathom_tol (1e-6): a node witha lower bound vlb is fathomed if 
-%    (GUB - vlb)/max(GUB,1) < fathom_tol
-%   4)use_quadprog (1): method used to obtain GUB. If use_quadprog is 1,
-%     MATLAB's quadprog is used to obtain GUB; otherwise, a feasible
-%     solution extracted from the SDP relaxation is used to calculate GUB
-%   5)verbosity (1): has the following different display levels
-%       0 : only display the final results
-%       1 : display status for each node 
-%       2 : display progress of solving each node, every 100 iterations
-%       >2 : display progress of solving each node, every 25 iterations
-%   6)tol (1e-8): numeric tolerance. When |LB(i) - UB(i)| < tol, we treat
-%     LB(i) as equal to UB(i), that is, x(i) is fixed.
+%
+% * H,f,A,b,Aeq,beq,LB,UB: identical to the corresponding input
+%   arguments for MATLAB's QUADPROG function; see also the QP
+%   formulation above
+%
+% * options: a structure with the following possible fields (defaults in
+%   parentheses):
+%
+%   1) max_time (86400): the maximum amount of time QUADPROGBB
+%      is allowed to run, in seconds
+%
+%   2) fathom_tol (1e-6): a branch-and-bound node with a valid lower
+%      bound VLB and global upper bound GUB is fathomed when (GUB -
+%      VLB)/max(|GUB|,1) < fathom_tol
+%
+%   3) tol (1e-8): all-purpose numerical tolerance. For example, when
+%      |LB(i) - UB(i)| < tol, we treat LB(i) as equal to UB(i), that is,
+%      x(i) is fixed.
+%
+%   4) verbosity (1): has the following different display levels
+%         0 : only display the final results
+%         1 : display status for each node 
+%         2 : display progress of solving each node, every 100 iterations
+%        >2 : display progress of solving each node, every 25 iterations
+%
+%   5) use_quadprog (1): method used to obtain feasible solutions and
+%      global upper bound (GUB). If use_quadprog is 1, MATLAB's QUADPROG
+%      inside the Optimization Toolbox is used if a valid toolbox
+%      license is available; otherwise, feasible solutions and the GUB
+%      are gotten from the SDP relaxation at each node
+%
+%   6) use_single_processor (0): If 1, then force Matlab to use only
+%      a single processor using the command maxNumCompThreads(1).
+%      We have found that, due to Matlab internals, QUADPROGBB can
+%      actually be faster when restricted to a single processor,
+%      especially when multiple CPUs are under heavy load. The command
+%      maxNumCompThreads(1) may produce a warning message.
+%
+%   7) constant (0): a constant by which to shift the objective.
+%      May be useful in maintaining comparable optimal values after a
+%      reformulation.
 %
 % Output arguments:
-% * x,fval: the solution and objective value of the QP; check stat.status
-%   for the status of the solution, i.e., whether it is optimal
+%
+% * x,fval: the solution and objective value of the QP; check
+%   stat.status for the solution status, i.e., whether it is optimal
+%
 % * time: time used by the branch-and-bound algorithm, in seconds
-% * stat: a struct with more statistics of the algorithm:
-%   1)time_pre: time spent on preprocessing
-%   2)time_LP:  time spent on calculating bounds in preprocessing
-%   3)time_BB:  time spent on branch-and-bound
-%   4)nodes: total number of nodes solved
-%   5)status: final status of the solution
-%     'optimal_solution': optimal solution found
-%     'time_limit_exceeded' : time limit specified by options.max_time is 
-%     excedeeded
-%     'infeasible_or_unbounded' : the problem is infeasible or unbounded
-%     'numerical_issues_of_optdnn': if a large pencentage (>30%) of the 
-%     nodes encountered numerical issues, then this status is returned
-% 
-% Third party software: CPLEX, used as LP solvers
 %
+% * stat: a structure with more information:
+%
+%   1) time_pre: time spent on preprocessing
+%
+%   2) time_LP:  time spent on calculating bounds in preprocessing
+%
+%   3) time_BB:  time spent on branch-and-bound
+%
+%   4) nodes:    total number of nodes solved
+%
+%   5) status: final status of the solution
+%
+%      'opt_soln'  : optimal solution found
+%      'time_limit': time limit specified by options.max_time was
+%                    excedeeded
+%      'inf_or_unb': the problem is infeasible or unbounded
+%      'num_issues': if a large pencentage (>30%) of the nodes
+%                    encountered numerical issues, then this status
+%                    is returned
+% 
 % References:
-%  * Samuel Burer. "Optimizing a polyhedral-semidefinite relaxation of completely positive 
-%  programs." Mathematical Programming Computation, 2(1):1-19, 2010.
 %
-%  * Jieqiu Chen, Samuel Burer. "Globally solving nonconvex quadratic programming problems 
-%  via completely positive programming." Mathematical Programming Computation, DOI: 10.1007/s12532-011-0033-9.
+%  * Jieqiu Chen, Samuel Burer. "Globally solving nonconvex quadratic
+%    programming problems via completely positive programming."
+%    Mathematical Programming Computation, DOI: 10.1007/s12532-011-0033-9.
+%
+%  * Samuel Burer. "Optimizing a polyhedral-semidefinite relaxation of
+%    completely positive programs." Mathematical Programming
+%    Computation, 2(1):1-19, 2010.
 % 
-
-%% enforce matlab to use only 1 processor
-
-maxNumCompThreads(1);
 
 tic;
 
@@ -80,7 +114,7 @@ tic;
 
 % set default options
 
-defaultopt = struct('max_time',86400,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1);
+defaultopt = struct('max_time',86400,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1,'constant',0,'use_single_processor',0);
 
 if nargin < 2 
   fprintf('Usage: \n');
@@ -105,7 +139,7 @@ if n ~= n1
   error('Dimensions of H and f are not consistent!');
 end
 
-if nargin < 10
+if nargin < 9
   options = defaultopt;
 else
   if isstruct(options)
@@ -125,22 +159,41 @@ else
       options.use_quadprog = defaultopt.use_quadprog;
     end
     if ~isfield(options,'verbosity')
-      options.verbosity = 1;
+      options.verbosity = defaultopt.verbosity;
+    end
+    if ~isfield(options,'constant')
+      options.constant = defaultopt.constant;
+    end
+    if ~isfield(options,'use_single_processor')
+      options.use_single_processor = defaultopt.use_single_processor;
     end
   else
     fprintf('The input argument options is not a struct!\n');
-    fprintf('Overided it with default options\n\n');
+    fprintf('Overwritten with default options.\n\n');
     options = defaultopt;
   end
 end
 
+% if nargin < 9
+%   cons = 0;
+% else
+%   if isempty(cons)
+%     cons = 0;
+%   end
+% end
+cons = options.constant;
 
-if nargin < 9
-  cons = 0;
-else
-  if isempty(cons)
-    cons = 0;
-  end
+%% enforce matlab to use only 1 processor as requested
+
+if options.use_single_processor == 1
+  maxNumCompThreads(1);
+end
+
+%% Suppress the use of QUADPROG if there is no license for the Opt
+%% Toolbox anyway.
+
+if license('test','optimization_toolbox') == 0
+  options.use_quadprog = 0;
 end
 
 if nargin < 8
@@ -201,7 +254,7 @@ if (~isempty(A)) || (~isempty(Aeq))
     fprintf('\n\nFail assumption check:\n\n');
     fprintf('CPLEX status of solving the feasibility problem: %s', output.cplexstatusstring);
     x = []; fval = []; time = 0;
-    stat.status = 'infeasible_or_unbounded';
+    stat.status = 'inf_or_unb';
     return
 
   end
@@ -240,7 +293,7 @@ if sstruct.flag
   fprintf('FINAL STATUS 3: solved = fully + fathomed + poorly : %d = %d + %d + %d\n', ...
       0,0,0,0);
   fprintf('FINAL STATUS 4: time = %d\n', time);
-  stat.status = 'optimal_solution';
+  stat.status = 'opt_soln';
   return
 end
  
@@ -355,7 +408,7 @@ while length(LBLB) > 0
     %% -------------------------------------
 
     if toc > options.max_time
-      stat.status = 'time_limit_exceeded';
+      stat.status = 'time_limit';
       break;
     end
 
@@ -698,9 +751,9 @@ stat.time_BB = time - stat.time_pre;
 stat.nodes = nodes_solved;
 if isempty(stat.status)
   if nodes_solved_poorly/nodes_solved > .3 
-    stat.status = 'numerical_issues_of_optdnn';
+    stat.status = 'num_issues';
   else
-    stat.status = 'optimal_solution';
+    stat.status = 'opt_soln';
   end
 end
 
