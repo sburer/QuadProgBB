@@ -1,0 +1,6 @@
+2011-11-10
+
+In output.txt, the problem looks likes its solving fine, and it gets
+the gap down to around 0.008%. Then, all of a sudden, it finds a much
+better GUB, which is beyond the current GLB (a contradiction!) and all
+remaining nodes are fathomed.
