@@ -1,15 +1,7 @@
-Do we already have DOI for our paper?
+1. Update help files and website to emphasize that our code is a global,
+   not local, code.
 
-4. It never hurts to ship binaries.
-
-5. In opt_dnn_compile, I interpreted the comment below as if I should
-uncomment those lines. However, what I should do was to edit the c files
-and remove the trailing underscores (at least that is what worked for
-me)
-%% Possible Windows variation
-%% In Windows, do not append underscores to blas function names in .c files.
-%% mex -O project.c C:\Progra~1\MATLAB\R2008a\extern\lib\win32\lcc\libmwlapack.lib C:\Progra~1\MATLAB\R2008a\extern\lib\win32\lcc\libmwblas.lib
-% mex -largeArrayDims -I/user/biz/jieqchen/matlab/cplex110/include/ilcplex -L/user/biz/jieqchen/matlab/cplex110/lib/x86-64_sles9.0_3.3/static_pic cplexint.c -lcplex
+2. Investigate application of the guy who emailed.
 
 ==========================================================
   FINISHED
@@ -65,4 +57,17 @@ max_time or max_iter )
     * infeasible_or_unbounded
     * numerical_issues_of_optdnn: if nodes_solved_poorly / nodes_solved > 0.3
 
+
+4. It never hurts to ship binaries.
+
+5. In opt_dnn_compile, I interpreted the comment below as if I should
+uncomment those lines. However, what I should do was to edit the c files
+and remove the trailing underscores (at least that is what worked for
+me)
+%% Possible Windows variation
+%% In Windows, do not append underscores to blas function names in .c files.
+%% mex -O project.c C:\Progra~1\MATLAB\R2008a\extern\lib\win32\lcc\libmwlapack.lib C:\Progra~1\MATLAB\R2008a\extern\lib\win32\lcc\libmwblas.lib
+% mex -largeArrayDims -I/user/biz/jieqchen/matlab/cplex110/include/ilcplex -L/user/biz/jieqchen/matlab/cplex110/lib/x86-64_sles9.0_3.3/static_pic cplexint.c -lcplex
+
+Do we already have DOI for our paper?
 
