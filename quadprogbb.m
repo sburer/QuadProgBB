@@ -114,7 +114,18 @@ tic;
 
 % set default options
 
-defaultopt = struct('max_time',86400,'tol',1e-8,'fathom_tol',1e-6,'max_iter',1000,'use_quadprog',1,'verbosity',1,'constant',0,'use_single_processor',0);
+defaultopt = struct(...
+  'max_time'            ,86400,...
+  'tol'                 ,1e-8 ,...
+  'fathom_tol'          ,1e-6 ,...
+  'max_iter'            ,1000 ,...
+  'use_quadprog'        ,1    ,...
+  'verbosity'           ,1    ,...
+  'constant'            ,0    ,...
+  'use_single_processor',0    ,...
+  'checkpt'             ,0    ,...
+  'checkfile'           ,''    ...      
+  );
 
 if nargin < 2 
   fprintf('Usage: \n');
@@ -166,6 +177,12 @@ else
     end
     if ~isfield(options,'use_single_processor')
       options.use_single_processor = defaultopt.use_single_processor;
+    end
+    if ~isfield(options,'checkpt')
+      options.checkpt = defaultopt.checkpt;
+    end
+    if ~isfield(options,'checkfile')
+      options.checkfile = defaultopt.checkfile;
     end
   else
     fprintf('The input argument options is not a struct!\n');
@@ -385,6 +402,23 @@ end
 
 while length(LBLB) > 0
 
+    %% -----------------------------
+    %% Load check point if requested
+    %% -----------------------------
+
+    if length(options.checkfile) > 0 & nodes_solved == 0
+      load(options.checkfile);
+    end
+
+    %% ------------------------
+    %% Check point if requested
+    %% ------------------------
+
+    if options.checkpt > 0 & mod(nodes_solved+1,options.checkpt) == 0
+      filestr = strcat('check',sprintf('%04d',nodes_solved+1),'.mat');
+      save(filestr);
+    end
+
     %% ------------
     %% Print status
     %% ------------
@@ -559,7 +593,7 @@ while length(LBLB) > 0
       x0 = Y(2:bign+1,1);
       x0 = project(x0,local_A,local_b,L,U); %% In CPLEX we trust! 
       x0val = 0.5*x0'*H*x0 + f'*x0;
-      if x0val < gUB % x0 is best so far
+      if feasible(x0,A,b,L_save,U_save,options.tol) & x0val < gUB % x0 is best so far
         gUB = x0val;
         xx = x0;
       end
@@ -571,7 +605,7 @@ while length(LBLB) > 0
         tmpx = [];
         tmpval = Inf;
       end
-      if tmpval < gUB
+      if feasible(tmpx,A,b,L_save,U_save,options.tol) & tmpval < gUB
         gUB = tmpval;
         xx = tmpx;
       end
@@ -579,7 +613,7 @@ while length(LBLB) > 0
       x0 = Z(2:bign+1,1)/Z(1,1);
       x0 = project(x0,local_A,local_b,L,U); %% In CPLEX we trust! 
       x0val = 0.5*x0'*H*x0 + f'*x0;
-      if x0val < gUB % x0 is better than what quadprog found
+      if feasible(x0,A,b,L_save,U_save,options.tol) & x0val < gUB % x0 is better than what quadprog found
         gUB = x0val;
         xx = x0;
       end
@@ -591,7 +625,7 @@ while length(LBLB) > 0
         tmpx = [];
         tmpval = Inf;
       end
-      if tmpval < gUB
+      if feasible(tmpx,A,b,L_save,U_save,options.tol) & tmpval < gUB
         gUB = tmpval;
         xx = tmpx;
       end
@@ -1660,8 +1694,10 @@ function x = project(x0,A,b,L,U)
 %% prefer this still be CPLEX if possible. I believe CPLEX should be
 %% faster and more accurate.
 
-quadopts = optimset('LargeScale','off','Display','off');
-x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],quadopts);
+% quadopts = optimset('LargeScale','off','Display','off');
+% x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],quadopts);
+cplexopts = cplexoptimset('Display','off');
+x = cplexqp(2*eye(n),-2*x0,[],[],A,b,L,U,[],cplexopts);
 
 % solstat
 % details
@@ -1897,4 +1933,20 @@ if strcmp(flag,'b')|strcmp(flag,'l')
 end
 
 time = toc(tStart);
+return
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function yes_or_no = feasible(x,A,b,L,U,tol)
+
+yes_or_no = 1;
+if norm(A*x-b)/max(1,norm(b)) > tol
+  yes_or_no = 0;
+elseif min(x-L) < -tol % Should this be relative somehow?
+  yes_or_no = 0;
+elseif min(U-x) < -tol % Should this be relative somehow?
+  yes_or_no = 0;
+end
+
 return
