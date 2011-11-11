@@ -549,6 +549,13 @@ while length(LBLB) > 0
       %% Right now, we use projected version of 0-th col of Z for
       %% branching. Is this a good choice?
 
+      %% Nov 10 2011: Jieqiu, I would suggest that we verify the
+      %% feasibility of any x that might lead to a better GUB. We could
+      %% require something like norm(A*x-b) < tol, min(x-L) > -tol,
+      %% and min(U-x) > -tol, where tol is the 'all-purpose tolerance'
+      %% mentioned in the help. If the tolerances are violated, we
+      %% simply do not update the GUB. What do you think?
+
       x0 = Y(2:bign+1,1);
       x0 = project(x0,local_A,local_b,L,U); %% In CPLEX we trust! 
       x0val = 0.5*x0'*H*x0 + f'*x0;
@@ -1645,6 +1652,13 @@ function x = project(x0,A,b,L,U)
 %                           A, b, [1:m], [], ...
 %                           L, U, [], ...
 %                           [], []);
+
+%% Nov 10 2011: Jieqiu, I kind of remember when we wrote the cplexint
+%% code above. I think the idea was to use the accuracy of CPLEX to help
+%% us restore feasibility (e.g., for more accurate GUB calculations).
+%% Do you remember why we switched to quadprog below? I guess I would
+%% prefer this still be CPLEX if possible. I believe CPLEX should be
+%% faster and more accurate.
 
 quadopts = optimset('LargeScale','off','Display','off');
 x = quadprog(2*eye(n),-2*x0,[],[],A,b,L,U,[],quadopts);
