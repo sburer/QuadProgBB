@@ -1,3 +1,10 @@
+2011-11-15
+
+In run3, we see that the GUB is now stable. But the problem still takes
+a long time for branching with lots of poorly solved nodes.
+
+A check file from that run has been saved.
+
 2011-11-10
 
 In output.txt, the problem looks likes its solving fine, and it gets
