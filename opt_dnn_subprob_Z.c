@@ -1,6 +1,14 @@
 #include <math.h>
 #include "mex.h"
 
+#if defined(_WIN32)
+#define dgemm_ dgemm
+#define dsymm_ dsymm
+#define dsyevr_ dsyevr
+#define dsyev_ dsyev
+#define dsyr_ dsyr
+#endif
+
 #define MYCALLOC(VAR,TYPE,SIZE) VAR = (TYPE*)calloc(SIZE, sizeof(TYPE))
 #define MYFREE(VAR) free(VAR)
 

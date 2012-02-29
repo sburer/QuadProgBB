@@ -10,7 +10,8 @@ function [x,fval,time,stat] = quadprogbb(H,f,A,b,Aeq,beq,LB,UB,options)
 %             LB <= x <= UB
 %
 % --------------------------------------------------------------
-% --> This code requires the Matlab interface to CPLEX 12.2! <--
+% --> This code requires the Matlab interface to CPLEX 12.2  <--
+% --> or later!                                              <--
 % --------------------------------------------------------------
 %
 % Syntax:
@@ -263,7 +264,7 @@ stat = struct('time_pre',0,'time_LP',0,'time_BB',0,'nodes',0,'status',[]);
 
 if (~isempty(A)) || (~isempty(Aeq))
   
-  cplexopts = cplexoptimset('Display','off');
+  cplexopts = cplexoptimset('Display','off','Diagnostics','on');
   [x,fval,exitflag,output] = cplexlp(zeros(n,1),A,b,Aeq,beq,LB,UB,[],cplexopts);
   
   if output.cplexstatus > 1
@@ -1702,8 +1703,7 @@ function yes_or_no = isfeasible(A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-cplexopts = cplexoptimset('Display','off');
-
+cplexopts = cplexoptimset('Display','off','Diagnostics','on');
 [x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],cplexopts);
 
 % solstat
