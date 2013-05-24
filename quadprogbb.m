@@ -355,7 +355,7 @@ SIGSIG = -1; % Signal that we want default sig in aug Lag algorithm
 %% ------------------------------------------------------------------
 
 if options.use_quadprog
-  quadopts = optimset('LargeScale','off','Display','off');
+  quadopts = optimset('LargeScale','off','Display','off','Algorithm','active-set');
   [xx,gUB] = quadprog(H,f,[],[],A,b,L_save,U_save,[],quadopts);
 else
   xx = [];
@@ -593,7 +593,7 @@ while length(LBLB) > 0
       end
 
       if options.use_quadprog
-        quadopts = optimset('LargeScale','off','Display','off');
+        quadopts = optimset('LargeScale','off','Display','off','Algorithm','active-set');
         [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,quadopts);
       else
         tmpx = [];
@@ -613,7 +613,7 @@ while length(LBLB) > 0
       end
 
       if options.use_quadprog
-        quadopts = optimset('LargeScale','off','Display','off');
+        quadopts = optimset('LargeScale','off','Display','off','Algorithm','active-set');
         [tmpx,tmpval] = quadprog(H,f,[],[],A,b,L_save,U_save,x0,quadopts);
       else
         tmpx = [];
