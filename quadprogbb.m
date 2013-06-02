@@ -905,6 +905,7 @@ if tmp_m1 < min(tmp_m,tmp_n)
   beq = beq(rowidx);
 end
 
+
 [H,f,A,b,Aeq,beq,LB,UB,cons,sstruct,tlp] = refm(H,f,A,b,Aeq,beq,LB,UB,cons,sstruct);
 
 timeLP = timeLP + tlp;
@@ -1600,11 +1601,18 @@ n = size(H,1);
 meq = size(Aeq,1);
 
 if ~isempty(idxL)
+
+  idxLc = setdiff(1:n,idxL);
   lb = LB(idxL);
+
   cons = cons + 0.5*lb'*H(idxL,idxL)*lb + f(idxL)'*lb;
   f(idxL)= f(idxL) + H(idxL,idxL)*lb;
-  idxLc = setdiff(1:n,idxL);
-  f(idxLc) = f(idxLc) + H(idxLc,idxL)*lb;
+  
+  %% if idxLc is empty, then dimension will not agree on the following equations 
+  %% so add a check here
+  if (length(idxLc) > 0) 
+     f(idxLc) = f(idxLc) + H(idxLc,idxL)*lb;
+  end
 
   if m > 0
     b = b - A(:,idxL)*lb;
