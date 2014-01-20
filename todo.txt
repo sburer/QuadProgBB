@@ -71,3 +71,5 @@ me)
 
 Do we already have DOI for our paper?
 
+3. (May 24, 2013) Fix bug Johan Loefberg emailed about.
+
