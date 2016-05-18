@@ -264,7 +264,7 @@ stat = struct('time_pre',0,'time_LP',0,'time_BB',0,'nodes',0,'status',[]);
 
 if (~isempty(A)) || (~isempty(Aeq))
   
-  cplexopts = cplexoptimset('Display','off','Diagnostics','on');
+  cplexopts = cplexoptimset('Display','off');
   [x,fval,exitflag,output] = cplexlp(zeros(n,1),A,b,Aeq,beq,LB,UB,[],cplexopts);
   
   if output.cplexstatus > 1
@@ -1711,7 +1711,7 @@ function yes_or_no = isfeasible(A,b,L,U)
 %                           L, U, [], ...
 %                           [], []);
 
-cplexopts = cplexoptimset('Display','off','Diagnostics','on');
+cplexopts = cplexoptimset('Display','off');
 [x,tmp,exitflag,output] = cplexlp(zeros(n,1),[],[],A,b,L,U,[],cplexopts);
 
 % solstat
